@@ -5,8 +5,10 @@ package global // import "go.opentelemetry.io/otel/internal/global"
 
 import (
 	"errors"
+	"reflect"
 	"sync"
 	"sync/atomic"
+	"unique"
 
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/propagation"
@@ -19,7 +21,9 @@ type (
 	}
 
 	tracerProviderHolder struct {
-		tp trace.TracerProvider
+		flag     bool
+		tp       unique.Handle[trace.TracerProvider]
+		nonCmpTp trace.TracerProvider
 	}
 
 	propagatorsHolder struct {
@@ -85,8 +89,28 @@ func SetErrorHandler(h ErrorHandler) {
 	globalErrorHandler.Store(errorHandlerHolder{eh: h})
 }
 
+func GetTracerProvider() (trace.TracerProvider, bool) {
+	flag := globalTracer.Load().(tracerProviderHolder).flag
+	if !flag {
+		return globalTracer.Load().(tracerProviderHolder).nonCmpTp, false
+	}
+
+	tp := globalTracer.Load().(tracerProviderHolder).tp
+	return tp.Value(), true
+}
+
 // TracerProvider is the internal implementation for global.TracerProvider.
 func TracerProvider() trace.TracerProvider {
+	tp, _ := GetTracerProvider()
+	return tp
+}
+
+func isCmp(t any) bool {
+	ty := reflect.TypeOf(t)
+	return ty.Comparable()
+}
+
+func getTraceProviderHandle() unique.Handle[trace.TracerProvider] {
 	return globalTracer.Load().(tracerProviderHolder).tp
 }
 
@@ -94,16 +118,29 @@ func TracerProvider() trace.TracerProvider {
 func SetTracerProvider(tp trace.TracerProvider) {
 	current := TracerProvider()
 
-	if _, cOk := current.(*tracerProvider); cOk {
-		if _, tpOk := tp.(*tracerProvider); tpOk && current == tp {
-			// Do not assign the default delegating TracerProvider to delegate
-			// to itself.
+	if isCmp(tp) {
+		hd := unique.Make[trace.TracerProvider](tp)
+		hd1 := getTraceProviderHandle()
+
+		if hd == hd1 {
 			Error(
 				errors.New("no delegate configured in tracer provider"),
 				"Setting tracer provider to its current value. No delegate will be configured",
 			)
 			return
 		}
+
+		globalTracer.Store(
+			tracerProviderHolder{
+				tp:   unique.Make[trace.TracerProvider](tp),
+				flag: true,
+			})
+	} else {
+		globalTracer.Store(
+			tracerProviderHolder{
+				nonCmpTp: tp,
+				flag:     false,
+			})
 	}
 
 	delegateTraceOnce.Do(func() {
@@ -111,7 +148,6 @@ func SetTracerProvider(tp trace.TracerProvider) {
 			def.setDelegate(tp)
 		}
 	})
-	globalTracer.Store(tracerProviderHolder{tp: tp})
 }
 
 // TextMapPropagator is the internal implementation for global.TextMapPropagator.
@@ -182,7 +218,12 @@ func defaultErrorHandler() *atomic.Value {
 
 func defaultTracerValue() *atomic.Value {
 	v := &atomic.Value{}
-	v.Store(tracerProviderHolder{tp: &tracerProvider{}})
+	v.Store(
+		tracerProviderHolder{
+			tp:       unique.Make[trace.TracerProvider](&tracerProvider{}),
+			nonCmpTp: &tracerProvider{},
+			flag:     true,
+		})
 	return v
 }
 
