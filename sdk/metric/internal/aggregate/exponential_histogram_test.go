@@ -654,9 +654,9 @@ func BenchmarkPrepend(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		agg := newExpoHistogramDataPoint[float64](alice, 1024, 20, false, false)
 		n := math.MaxFloat64
-		for j := 0; j < 1024; j++ {
+		for range 1024 {
 			agg.record(n)
-			n = n / 2
+			n /= 2
 		}
 	}
 }
@@ -665,9 +665,9 @@ func BenchmarkAppend(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		agg := newExpoHistogramDataPoint[float64](alice, 1024, 20, false, false)
 		n := smallestNonZeroNormalFloat64
-		for j := 0; j < 1024; j++ {
+		for range 1024 {
 			agg.record(n)
-			n = n * 2
+			n *= 2
 		}
 	}
 }
@@ -1061,7 +1061,7 @@ func FuzzGetBin(f *testing.F) {
 	f.Fuzz(func(t *testing.T, v float64, scale int32) {
 		// GetBin only works on positive values.
 		if math.Signbit(v) {
-			v = v * -1
+			v *= -1
 		}
 		// GetBin Doesn't work on zero.
 		if v == 0.0 {
@@ -1073,10 +1073,22 @@ func FuzzGetBin(f *testing.F) {
 		p.scale = (scale%31+31)%31 - 10
 		got := p.getBin(v)
 		if v <= lowerBound(got, p.scale) {
-			t.Errorf("v=%x scale =%d had bin %d, but was below lower bound %x", v, p.scale, got, lowerBound(got, p.scale))
+			t.Errorf(
+				"v=%x scale =%d had bin %d, but was below lower bound %x",
+				v,
+				p.scale,
+				got,
+				lowerBound(got, p.scale),
+			)
 		}
 		if v > lowerBound(got+1, p.scale) {
-			t.Errorf("v=%x scale =%d had bin %d, but was above upper bound %x", v, p.scale, got, lowerBound(got+1, p.scale))
+			t.Errorf(
+				"v=%x scale =%d had bin %d, but was above upper bound %x",
+				v,
+				p.scale,
+				got,
+				lowerBound(got+1, p.scale),
+			)
 		}
 	})
 }

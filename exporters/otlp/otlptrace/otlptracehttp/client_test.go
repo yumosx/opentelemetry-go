@@ -15,12 +15,12 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	coltracepb "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp/internal/otlptracetest"
-	coltracepb "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 )
 
 const (
@@ -271,7 +271,11 @@ func TestNoRetry(t *testing.T) {
 	assert.True(t, strings.HasPrefix(err.Error(), "traces export: "))
 
 	unwrapped := errors.Unwrap(err)
-	assert.Contains(t, unwrapped.Error(), fmt.Sprintf("failed to send to http://%s/v1/traces: 400 Bad Request", mc.endpoint))
+	assert.Contains(
+		t,
+		unwrapped.Error(),
+		fmt.Sprintf("failed to send to http://%s/v1/traces: 400 Bad Request", mc.endpoint),
+	)
 
 	unwrapped2 := errors.Unwrap(unwrapped)
 	assert.Contains(t, unwrapped2.Error(), "missing required attribute aaa")

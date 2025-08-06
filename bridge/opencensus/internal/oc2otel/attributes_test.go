@@ -38,7 +38,7 @@ func TestAttributes(t *testing.T) {
 }
 
 func TestAttributesFromMap(t *testing.T) {
-	in := map[string]interface{}{
+	in := map[string]any{
 		"bool":    true,
 		"int64":   int64(49),
 		"float64": float64(1.618),
@@ -56,7 +56,11 @@ func TestAttributesFromMap(t *testing.T) {
 	gotAttributeSet := attribute.NewSet(got...)
 	wantAttributeSet := attribute.NewSet(want...)
 	if !gotAttributeSet.Equals(&wantAttributeSet) {
-		t.Errorf("Attributes conversion want %v, got %v", wantAttributeSet.Encoded(attribute.DefaultEncoder()), gotAttributeSet.Encoded(attribute.DefaultEncoder()))
+		t.Errorf(
+			"Attributes conversion want %v, got %v",
+			wantAttributeSet.Encoded(attribute.DefaultEncoder()),
+			gotAttributeSet.Encoded(attribute.DefaultEncoder()),
+		)
 	}
 }
 

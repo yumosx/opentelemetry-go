@@ -42,7 +42,7 @@ func testSumAggregateOutput(dest *metricdata.Aggregation) int {
 }
 
 func TestNewPipeline(t *testing.T) {
-	pipe := newPipeline(nil, nil, nil, exemplar.AlwaysOffFilter)
+	pipe := newPipeline(nil, nil, nil, exemplar.AlwaysOffFilter, 0)
 
 	output := metricdata.ResourceMetrics{}
 	err := pipe.produce(context.Background(), &output)
@@ -68,7 +68,7 @@ func TestNewPipeline(t *testing.T) {
 
 func TestPipelineUsesResource(t *testing.T) {
 	res := resource.NewWithAttributes("noSchema", attribute.String("test", "resource"))
-	pipe := newPipeline(res, nil, nil, exemplar.AlwaysOffFilter)
+	pipe := newPipeline(res, nil, nil, exemplar.AlwaysOffFilter, 0)
 
 	output := metricdata.ResourceMetrics{}
 	err := pipe.produce(context.Background(), &output)
@@ -76,14 +76,14 @@ func TestPipelineUsesResource(t *testing.T) {
 	assert.Equal(t, res, output.Resource)
 }
 
-func TestPipelineConcurrentSafe(t *testing.T) {
-	pipe := newPipeline(nil, nil, nil, exemplar.AlwaysOffFilter)
+func TestPipelineConcurrentSafe(*testing.T) {
+	pipe := newPipeline(nil, nil, nil, exemplar.AlwaysOffFilter, 0)
 	ctx := context.Background()
 	var output metricdata.ResourceMetrics
 
 	var wg sync.WaitGroup
 	const threads = 2
-	for i := 0; i < threads; i++ {
+	for i := range threads {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -142,13 +142,13 @@ func testDefaultViewImplicit[N int64 | float64]() func(t *testing.T) {
 		}{
 			{
 				name: "NoView",
-				pipe: newPipeline(nil, reader, nil, exemplar.AlwaysOffFilter),
+				pipe: newPipeline(nil, reader, nil, exemplar.AlwaysOffFilter, 0),
 			},
 			{
 				name: "NoMatchingView",
 				pipe: newPipeline(nil, reader, []View{
 					NewView(Instrument{Name: "foo"}, Stream{Name: "bar"}),
-				}, exemplar.AlwaysOffFilter),
+				}, exemplar.AlwaysOffFilter, 0),
 			},
 		}
 
@@ -233,7 +233,7 @@ func TestLogConflictName(t *testing.T) {
 			return instID{Name: tc.existing}
 		})
 
-		i := newInserter[int64](newPipeline(nil, nil, nil, exemplar.AlwaysOffFilter), &vc)
+		i := newInserter[int64](newPipeline(nil, nil, nil, exemplar.AlwaysOffFilter, 0), &vc)
 		i.logConflict(instID{Name: tc.name})
 
 		if tc.conflict {
@@ -275,7 +275,7 @@ func TestLogConflictSuggestView(t *testing.T) {
 	var vc cache[string, instID]
 	name := strings.ToLower(orig.Name)
 	_ = vc.Lookup(name, func() instID { return orig })
-	i := newInserter[int64](newPipeline(nil, nil, nil, exemplar.AlwaysOffFilter), &vc)
+	i := newInserter[int64](newPipeline(nil, nil, nil, exemplar.AlwaysOffFilter, 0), &vc)
 
 	viewSuggestion := func(inst instID, stream string) string {
 		return `"NewView(Instrument{` +
@@ -380,7 +380,7 @@ func TestInserterCachedAggregatorNameConflict(t *testing.T) {
 	}
 
 	var vc cache[string, instID]
-	pipe := newPipeline(nil, NewManualReader(), nil, exemplar.AlwaysOffFilter)
+	pipe := newPipeline(nil, NewManualReader(), nil, exemplar.AlwaysOffFilter, 0)
 	i := newInserter[int64](pipe, &vc)
 
 	readerAggregation := i.readerDefaultAggregation(kind)
@@ -511,7 +511,7 @@ func TestExemplars(t *testing.T) {
 
 	t.Run("Custom reservoir", func(t *testing.T) {
 		r := NewManualReader()
-		reservoirProviderSelector := func(agg Aggregation) exemplar.ReservoirProvider {
+		reservoirProviderSelector := func(Aggregation) exemplar.ReservoirProvider {
 			return exemplar.FixedSizeReservoirProvider(2)
 		}
 		v1 := NewView(Instrument{Name: "int64-expo-histogram"}, Stream{
@@ -612,4 +612,134 @@ func TestPipelineWithMultipleReaders(t *testing.T) {
 		assert.Len(t, rm.ScopeMetrics[0].Metrics, 1) {
 		assert.Equal(t, int64(2), rm.ScopeMetrics[0].Metrics[0].Data.(metricdata.Sum[int64]).DataPoints[0].Value)
 	}
+}
+
+// TestPipelineProduceErrors tests the issue described in https://github.com/open-telemetry/opentelemetry-go/issues/6344.
+// Earlier implementations of the pipeline produce method could corrupt metric data point state when the passed context
+// was canceled during execution of callbacks. In this case, corroption was the result of some or all callbacks being
+// invoked without instrument compAgg functions called.
+func TestPipelineProduceErrors(t *testing.T) {
+	// Create a test pipeline with aggregations
+	pipeReader := NewManualReader()
+	pipe := newPipeline(nil, pipeReader, nil, exemplar.AlwaysOffFilter, 0)
+
+	// Set up an observable with callbacks
+	var testObsID observableID[int64]
+	aggBuilder := aggregate.Builder[int64]{Temporality: metricdata.CumulativeTemporality}
+	measure, _ := aggBuilder.Sum(true)
+	pipe.addInt64Measure(testObsID, []aggregate.Measure[int64]{measure})
+
+	// Add an aggregation that just sets the data point value to the number of times the aggregation is invoked
+	aggCallCount := 0
+	inst := instrumentSync{
+		name:        "test-metric",
+		description: "test description",
+		unit:        "test unit",
+		compAgg: func(dest *metricdata.Aggregation) int {
+			aggCallCount++
+
+			*dest = metricdata.Sum[int64]{
+				Temporality: metricdata.CumulativeTemporality,
+				IsMonotonic: false,
+				DataPoints:  []metricdata.DataPoint[int64]{{Value: int64(aggCallCount)}},
+			}
+			return aggCallCount
+		},
+	}
+	pipe.addSync(instrumentation.Scope{Name: "test"}, inst)
+
+	ctx, cancelCtx := context.WithCancel(context.Background())
+	var shouldCancelContext bool // When true, the second callback cancels ctx
+	var shouldReturnError bool   // When true, the third callback returns an error
+	var callbackCounts [3]int
+
+	pipe.callbacks = append(pipe.callbacks,
+		// Callback 1: cancels the context during execution but continues to populate data
+		func(ctx context.Context) error {
+			callbackCounts[0]++
+			for _, m := range pipe.int64Measures[testObsID] {
+				m(ctx, 123, *attribute.EmptySet())
+			}
+			return nil
+		},
+		// Callback 2: populates int64 observable data
+		func(context.Context) error {
+			callbackCounts[1]++
+			if shouldCancelContext {
+				cancelCtx()
+			}
+			return nil
+		},
+		// Callback 3: return an error
+		func(context.Context) error {
+			callbackCounts[2]++
+			if shouldReturnError {
+				return fmt.Errorf("test callback error")
+			}
+			return nil
+		})
+
+	assertMetrics := func(rm *metricdata.ResourceMetrics, expectVal int64) {
+		require.Len(t, rm.ScopeMetrics, 1)
+		require.Len(t, rm.ScopeMetrics[0].Metrics, 1)
+		metricdatatest.AssertEqual(t, metricdata.Metrics{
+			Name:        inst.name,
+			Description: inst.description,
+			Unit:        inst.unit,
+			Data: metricdata.Sum[int64]{
+				Temporality: metricdata.CumulativeTemporality,
+				IsMonotonic: false,
+				DataPoints:  []metricdata.DataPoint[int64]{{Value: expectVal}},
+			},
+		}, rm.ScopeMetrics[0].Metrics[0], metricdatatest.IgnoreTimestamp())
+	}
+
+	t.Run("no errors", func(t *testing.T) {
+		var rm metricdata.ResourceMetrics
+		err := pipe.produce(ctx, &rm)
+		require.NoError(t, err)
+
+		assert.Equal(t, [3]int{1, 1, 1}, callbackCounts)
+		assert.Equal(t, 1, aggCallCount)
+
+		assertMetrics(&rm, 1)
+	})
+
+	t.Run("callback returns error", func(t *testing.T) {
+		shouldReturnError = true
+
+		var rm metricdata.ResourceMetrics
+		err := pipe.produce(ctx, &rm)
+		require.ErrorContains(t, err, "test callback error")
+
+		// Even though a callback returned an error, the agg function is still called
+		assert.Equal(t, [3]int{2, 2, 2}, callbackCounts)
+		assert.Equal(t, 2, aggCallCount)
+
+		assertMetrics(&rm, 2)
+	})
+
+	t.Run("context canceled during produce", func(t *testing.T) {
+		shouldCancelContext = true
+
+		var rm metricdata.ResourceMetrics
+		err := pipe.produce(ctx, &rm)
+		require.ErrorContains(t, err, "test callback error")
+
+		// Even though the context was canceled midway through invoking callbacks,
+		// all remaining callbacks and agg functions are still called
+		assert.Equal(t, [3]int{3, 3, 3}, callbackCounts)
+		assert.Equal(t, 3, aggCallCount)
+	})
+
+	t.Run("context already cancelled", func(t *testing.T) {
+		var output metricdata.ResourceMetrics
+		err := pipe.produce(ctx, &output)
+		require.ErrorIs(t, err, context.Canceled)
+
+		// No callbacks or agg functions are called since the context was canceled prior to invoking
+		// the produce method
+		assert.Equal(t, [3]int{3, 3, 3}, callbackCounts)
+		assert.Equal(t, 3, aggCallCount)
+	})
 }

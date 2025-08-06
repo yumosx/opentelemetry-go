@@ -112,6 +112,29 @@ It is critical you make sure the version you push upstream is correct.
 Finally create a Release for the new `<new tag>` on GitHub.
 The release body should include all the release notes from the Changelog for this release.
 
+### Sign the Release Artifact
+
+To ensure we comply with CNCF best practices, we need to sign the release artifact.
+The tarball attached to the GitHub release needs to be signed with your GPG key.
+
+Follow [these steps] to sign the release artifact and upload it to GitHub.
+You can use [this script] to verify the contents of the tarball before signing it.
+
+Be sure to use the correct GPG key when signing the release artifact.
+
+```terminal
+gpg --local-user <key-id> --armor --detach-sign opentelemetry-go-<version>.tar.gz
+```
+
+You can verify the signature with:
+
+```terminal
+gpg --verify opentelemetry-go-<version>.tar.gz.asc opentelemetry-go-<version>.tar.gz
+```
+
+[these steps]: https://wiki.debian.org/Creating%20signed%20GitHub%20releases
+[this script]: https://github.com/MrAlias/attest-sh
+
 ## Post-Release
 
 ### Contrib Repository
@@ -132,7 +155,7 @@ Importantly, bump any package versions referenced to be the latest one you just 
 Once a release is made, ensure all issues that were fixed and PRs that were merged as part of this release are added to the corresponding milestone.
 This helps track what changes were included in each release.
 
-- To find issues that haven't been included in a milestone, use this [GitHub search query](https://github.com/open-telemetry/opentelemetry-go/issues?q=is%3Aissue%20no%3Amilestone%20is%3Aclosed%20sort%3Aupdated-desc).
+- To find issues that haven't been included in a milestone, use this [GitHub search query](https://github.com/open-telemetry/opentelemetry-go/issues?q=is%3Aissue%20no%3Amilestone%20is%3Aclosed%20sort%3Aupdated-desc%20reason%3Acompleted%20-label%3AStale%20linked%3Apr)
 - To find merged PRs that haven't been included in a milestone, use this [GitHub search query](https://github.com/open-telemetry/opentelemetry-go/pulls?q=is%3Apr+no%3Amilestone+is%3Amerged).
 
 Once all related issues and PRs have been added to the milestone, close the milestone.

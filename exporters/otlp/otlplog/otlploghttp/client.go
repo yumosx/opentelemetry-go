@@ -18,12 +18,11 @@ import (
 	"sync"
 	"time"
 
+	collogpb "go.opentelemetry.io/proto/otlp/collector/logs/v1"
+	logpb "go.opentelemetry.io/proto/otlp/logs/v1"
 	"google.golang.org/protobuf/proto"
 
 	"go.opentelemetry.io/otel"
-	collogpb "go.opentelemetry.io/proto/otlp/collector/logs/v1"
-	logpb "go.opentelemetry.io/proto/otlp/logs/v1"
-
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp/internal/retry"
 )
 
@@ -44,20 +43,23 @@ func newNoopClient() *client {
 
 // newHTTPClient creates a new HTTP log client.
 func newHTTPClient(cfg config) (*client, error) {
-	hc := &http.Client{
-		Transport: ourTransport,
-		Timeout:   cfg.timeout.Value,
-	}
-
-	if cfg.tlsCfg.Value != nil || cfg.proxy.Value != nil {
-		clonedTransport := ourTransport.Clone()
-		hc.Transport = clonedTransport
-
-		if cfg.tlsCfg.Value != nil {
-			clonedTransport.TLSClientConfig = cfg.tlsCfg.Value
+	hc := cfg.httpClient
+	if hc == nil {
+		hc = &http.Client{
+			Transport: ourTransport,
+			Timeout:   cfg.timeout.Value,
 		}
-		if cfg.proxy.Value != nil {
-			clonedTransport.Proxy = cfg.proxy.Value
+
+		if cfg.tlsCfg.Value != nil || cfg.proxy.Value != nil {
+			clonedTransport := ourTransport.Clone()
+			hc.Transport = clonedTransport
+
+			if cfg.tlsCfg.Value != nil {
+				clonedTransport.TLSClientConfig = cfg.tlsCfg.Value
+			}
+			if cfg.proxy.Value != nil {
+				clonedTransport.Proxy = cfg.proxy.Value
+			}
 		}
 	}
 
@@ -197,7 +199,7 @@ func (c *httpClient) uploadLogs(ctx context.Context, data []*logpb.ResourceLogs)
 			return err
 		}
 		respStr := strings.TrimSpace(respData.String())
-		if len(respStr) == 0 {
+		if respStr == "" {
 			respStr = "(empty)"
 		}
 		bodyErr := fmt.Errorf("body: %s", respStr)
@@ -217,7 +219,7 @@ func (c *httpClient) uploadLogs(ctx context.Context, data []*logpb.ResourceLogs)
 }
 
 var gzPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		w := gzip.NewWriter(io.Discard)
 		return w
 	},
@@ -229,7 +231,7 @@ func (c *httpClient) newRequest(ctx context.Context, body []byte) (request, erro
 
 	switch c.compression {
 	case NoCompression:
-		r.ContentLength = (int64)(len(body))
+		r.ContentLength = int64(len(body))
 		req.bodyReader = bodyReader(body)
 	case GzipCompression:
 		// Ensure the content length is not used.
@@ -310,7 +312,7 @@ func (e retryableError) Unwrap() error {
 	return e.err
 }
 
-func (e retryableError) As(target interface{}) bool {
+func (e retryableError) As(target any) bool {
 	if e.err == nil {
 		return false
 	}

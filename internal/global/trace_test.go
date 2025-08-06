@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-
 	"go.opentelemetry.io/auto/sdk"
+
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/trace/embedded"
@@ -34,7 +34,11 @@ type fnTracer struct {
 	start func(ctx context.Context, spanName string, opts ...trace.SpanStartOption) (context.Context, trace.Span)
 }
 
-func (fn fnTracer) Start(ctx context.Context, spanName string, opts ...trace.SpanStartOption) (context.Context, trace.Span) {
+func (fn fnTracer) Start(
+	ctx context.Context,
+	spanName string,
+	opts ...trace.SpanStartOption,
+) (context.Context, trace.Span) {
 	return fn.start(ctx, spanName, opts...)
 }
 
@@ -55,11 +59,11 @@ func TestTraceProviderDelegation(t *testing.T) {
 	_, span1 := tracer1.Start(ctx, "span1")
 
 	SetTracerProvider(fnTracerProvider{
-		tracer: func(name string, opts ...trace.TracerOption) trace.Tracer {
+		tracer: func(name string, _ ...trace.TracerOption) trace.Tracer {
 			spans, ok := expected[name]
 			assert.Truef(t, ok, "invalid tracer: %s", name)
 			return fnTracer{
-				start: func(ctx context.Context, spanName string, opts ...trace.SpanStartOption) (context.Context, trace.Span) {
+				start: func(ctx context.Context, spanName string, _ ...trace.SpanStartOption) (context.Context, trace.Span) {
 					if ok {
 						if len(spans) == 0 {
 							t.Errorf("unexpected span: %s", spanName)
@@ -101,7 +105,7 @@ func TestTraceProviderDelegates(t *testing.T) {
 	// Configure it with a spy.
 	called := false
 	SetTracerProvider(fnTracerProvider{
-		tracer: func(name string, opts ...trace.TracerOption) trace.Tracer {
+		tracer: func(name string, _ ...trace.TracerOption) trace.Tracer {
 			called = true
 			assert.Equal(t, "abc", name)
 			return noop.NewTracerProvider().Tracer("")
@@ -138,7 +142,7 @@ func TestTraceProviderDelegatesConcurrentSafe(t *testing.T) {
 	// Configure it with a spy.
 	called := int32(0)
 	SetTracerProvider(fnTracerProvider{
-		tracer: func(name string, opts ...trace.TracerOption) trace.Tracer {
+		tracer: func(name string, _ ...trace.TracerOption) trace.Tracer {
 			newVal := atomic.AddInt32(&called, 1)
 			assert.Equal(t, "abc", name)
 			if newVal == 10 {
@@ -182,10 +186,10 @@ func TestTracerDelegatesConcurrentSafe(t *testing.T) {
 	// Configure it with a spy.
 	called := int32(0)
 	SetTracerProvider(fnTracerProvider{
-		tracer: func(name string, opts ...trace.TracerOption) trace.Tracer {
+		tracer: func(name string, _ ...trace.TracerOption) trace.Tracer {
 			assert.Equal(t, "abc", name)
 			return fnTracer{
-				start: func(ctx context.Context, spanName string, opts ...trace.SpanStartOption) (context.Context, trace.Span) {
+				start: func(ctx context.Context, spanName string, _ ...trace.SpanStartOption) (context.Context, trace.Span) {
 					newVal := atomic.AddInt32(&called, 1)
 					assert.Equal(t, "name", spanName)
 					if newVal == 10 {
@@ -214,7 +218,7 @@ func TestTraceProviderDelegatesSameInstance(t *testing.T) {
 	assert.Same(t, tracer, gtp.Tracer("abc", trace.WithInstrumentationVersion("xyz")))
 
 	SetTracerProvider(fnTracerProvider{
-		tracer: func(name string, opts ...trace.TracerOption) trace.Tracer {
+		tracer: func(string, ...trace.TracerOption) trace.Tracer {
 			return noop.NewTracerProvider().Tracer("")
 		},
 	})

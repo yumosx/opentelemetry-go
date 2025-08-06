@@ -96,7 +96,7 @@ func TestSimpleProcessorEmpty(t *testing.T) {
 	})
 }
 
-func TestSimpleProcessorConcurrentSafe(t *testing.T) {
+func TestSimpleProcessorConcurrentSafe(*testing.T) {
 	const goRoutineN = 10
 
 	var wg sync.WaitGroup
@@ -107,7 +107,7 @@ func TestSimpleProcessorConcurrentSafe(t *testing.T) {
 	ctx := context.Background()
 	e := &writerExporter{new(strings.Builder)}
 	s := log.NewSimpleProcessor(e)
-	for i := 0; i < goRoutineN; i++ {
+	for range goRoutineN {
 		go func() {
 			defer wg.Done()
 

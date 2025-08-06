@@ -7,7 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -57,7 +57,7 @@ func (t *shutdownSpanProcessor) ForceFlush(context.Context) error {
 func TestShutdownCallsTracerMethod(t *testing.T) {
 	stp := NewTracerProvider()
 	sp := &shutdownSpanProcessor{
-		shutdown: func(ctx context.Context) error {
+		shutdown: func(context.Context) error {
 			_ = stp.Tracer("abc") // must not deadlock
 			return nil
 		},
@@ -191,7 +191,7 @@ func TestFailedProcessorShutdownInUnregister(t *testing.T) {
 
 func TestSchemaURL(t *testing.T) {
 	stp := NewTracerProvider()
-	schemaURL := "https://opentelemetry.io/schemas/1.2.0"
+	schemaURL := "https://opentelemetry.io/schemas/1.21.0"
 	tracerIface := stp.Tracer("tracername", trace.WithSchemaURL(schemaURL))
 
 	// Verify that the SchemaURL of the constructed Tracer is correctly populated.
@@ -232,7 +232,7 @@ func TestTracerProviderSamplerConfigFromEnv(t *testing.T) {
 		argOptional         bool
 		description         string
 		errorType           error
-		invalidArgErrorType interface{}
+		invalidArgErrorType any
 	}
 
 	randFloat := rand.Float64()
@@ -353,7 +353,7 @@ func TestTracerProviderSamplerConfigFromEnv(t *testing.T) {
 	}
 }
 
-func testStoredError(t *testing.T, target interface{}) {
+func testStoredError(t *testing.T, target any) {
 	t.Helper()
 
 	if assert.Len(t, handler.errs, 1) && assert.Error(t, handler.errs[0]) {
@@ -374,12 +374,26 @@ func testStoredError(t *testing.T, target interface{}) {
 func TestTracerProviderReturnsSameTracer(t *testing.T) {
 	p := NewTracerProvider()
 
-	t0, t1, t2 := p.Tracer("t0"), p.Tracer("t1"), p.Tracer("t0", trace.WithInstrumentationAttributes(attribute.String("foo", "bar")))
+	t0, t1, t2 := p.Tracer(
+		"t0",
+	), p.Tracer(
+		"t1",
+	), p.Tracer(
+		"t0",
+		trace.WithInstrumentationAttributes(attribute.String("foo", "bar")),
+	)
 	assert.NotSame(t, t0, t1)
 	assert.NotSame(t, t0, t2)
 	assert.NotSame(t, t1, t2)
 
-	t3, t4, t5 := p.Tracer("t0"), p.Tracer("t1"), p.Tracer("t0", trace.WithInstrumentationAttributes(attribute.String("foo", "bar")))
+	t3, t4, t5 := p.Tracer(
+		"t0",
+	), p.Tracer(
+		"t1",
+	), p.Tracer(
+		"t0",
+		trace.WithInstrumentationAttributes(attribute.String("foo", "bar")),
+	)
 	assert.Same(t, t0, t3)
 	assert.Same(t, t1, t4)
 	assert.Same(t, t2, t5)

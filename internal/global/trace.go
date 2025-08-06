@@ -26,6 +26,7 @@ import (
 	"sync/atomic"
 
 	"go.opentelemetry.io/auto/sdk"
+
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
@@ -164,7 +165,12 @@ var autoInstEnabled = new(bool)
 // "noinline" pragma prevents the method from ever being inlined.
 //
 //go:noinline
-func (t *tracer) newSpan(ctx context.Context, autoSpan *bool, name string, opts []trace.SpanStartOption) (context.Context, trace.Span) {
+func (t *tracer) newSpan(
+	ctx context.Context,
+	autoSpan *bool,
+	name string,
+	opts []trace.SpanStartOption,
+) (context.Context, trace.Span) {
 	// autoInstEnabled is passed to newSpan via the autoSpan parameter. This is
 	// so the auto-instrumentation can define a uprobe for (*t).newSpan and be
 	// provided with the address of the bool autoInstEnabled points to. It

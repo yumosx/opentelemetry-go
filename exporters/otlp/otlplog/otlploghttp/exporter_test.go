@@ -13,9 +13,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	logpb "go.opentelemetry.io/proto/otlp/logs/v1"
 
 	"go.opentelemetry.io/otel/sdk/log"
-	logpb "go.opentelemetry.io/proto/otlp/logs/v1"
 )
 
 func TestExporterExportErrors(t *testing.T) {
@@ -93,7 +93,7 @@ func TestExporterConcurrentSafe(t *testing.T) {
 	var wg sync.WaitGroup
 	ctx, cancel := context.WithCancel(context.Background())
 	runs := new(uint64)
-	for i := 0; i < goroutines; i++ {
+	for range goroutines {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

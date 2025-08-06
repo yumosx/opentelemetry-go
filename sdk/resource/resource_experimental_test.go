@@ -10,7 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	semconv "go.opentelemetry.io/otel/semconv/v1.25.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.34.0"
 )
 
 func TestDefaultExperimental(t *testing.T) {
@@ -29,7 +29,10 @@ func TestDefaultExperimental(t *testing.T) {
 
 	serviceInstanceID, ok := res.Set().Value(semconv.ServiceInstanceIDKey)
 	require.True(t, ok)
-	matched, err := regexp.MatchString("^[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}$", serviceInstanceID.AsString())
+	matched, err := regexp.MatchString(
+		"^[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}$",
+		serviceInstanceID.AsString(),
+	)
 	require.NoError(t, err)
 	require.True(t, matched)
 }

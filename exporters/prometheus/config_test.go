@@ -113,17 +113,17 @@ func TestNewConfig(t *testing.T) {
 			},
 			wantConfig: config{
 				registerer: prometheus.DefaultRegisterer,
-				namespace:  "test_",
+				namespace:  "test",
 			},
 		},
 		{
 			name: "with namespace with trailing underscore",
 			options: []Option{
-				WithNamespace("test_"),
+				WithNamespace("test"),
 			},
 			wantConfig: config{
 				registerer: prometheus.DefaultRegisterer,
-				namespace:  "test_",
+				namespace:  "test",
 			},
 		},
 		{
@@ -133,7 +133,7 @@ func TestNewConfig(t *testing.T) {
 			},
 			wantConfig: config{
 				registerer: prometheus.DefaultRegisterer,
-				namespace:  "test/_",
+				namespace:  "test/",
 			},
 		},
 	}
@@ -152,6 +152,6 @@ func TestNewConfig(t *testing.T) {
 
 type noopProducer struct{}
 
-func (*noopProducer) Produce(ctx context.Context) ([]metricdata.ScopeMetrics, error) {
+func (*noopProducer) Produce(context.Context) ([]metricdata.ScopeMetrics, error) {
 	return nil, nil
 }

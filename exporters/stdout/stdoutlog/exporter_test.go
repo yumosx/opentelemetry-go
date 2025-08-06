@@ -11,16 +11,15 @@ import (
 	"testing"
 	"time"
 
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/sdk/instrumentation"
-	"go.opentelemetry.io/otel/sdk/log/logtest"
-	"go.opentelemetry.io/otel/sdk/resource"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/log"
+	"go.opentelemetry.io/otel/sdk/instrumentation"
 	sdklog "go.opentelemetry.io/otel/sdk/log"
+	"go.opentelemetry.io/otel/sdk/log/logtest"
+	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -194,7 +193,11 @@ func getPrettyJSON(now *time.Time) string {
 	var timestamps string
 	if now != nil {
 		serializedNow, _ := json.Marshal(now)
-		timestamps = "\n\t\"Timestamp\": " + string(serializedNow) + ",\n\t\"ObservedTimestamp\": " + string(serializedNow) + ","
+		timestamps = "\n\t\"Timestamp\": " + string(
+			serializedNow,
+		) + ",\n\t\"ObservedTimestamp\": " + string(
+			serializedNow,
+		) + ","
 	}
 
 	return `{` + timestamps + `
@@ -318,8 +321,12 @@ func getRecord(now time.Time) sdklog.Record {
 			"https://example.com/custom-resource-schema",
 			attribute.String("foo", "bar"),
 		),
-		InstrumentationScope: &instrumentation.Scope{Name: "name", Version: "version", SchemaURL: "https://example.com/custom-schema"},
-		DroppedAttributes:    10,
+		InstrumentationScope: &instrumentation.Scope{
+			Name:      "name",
+			Version:   "version",
+			SchemaURL: "https://example.com/custom-schema",
+		},
+		DroppedAttributes: 10,
 	}
 
 	return rf.NewRecord()
@@ -353,7 +360,7 @@ func TestExporterConcurrentSafe(t *testing.T) {
 			const goroutines = 10
 			var wg sync.WaitGroup
 			wg.Add(goroutines)
-			for i := 0; i < goroutines; i++ {
+			for range goroutines {
 				go func() {
 					defer wg.Done()
 					err := exporter.Export(context.Background(), []sdklog.Record{{}})

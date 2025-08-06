@@ -24,7 +24,7 @@ type WrapperTracerProvider struct {
 var _ trace.TracerProvider = (*WrapperTracerProvider)(nil)
 
 // Tracer returns the WrapperTracer associated with the WrapperTracerProvider.
-func (p *WrapperTracerProvider) Tracer(_ string, _ ...trace.TracerOption) trace.Tracer {
+func (p *WrapperTracerProvider) Tracer(string, ...trace.TracerOption) trace.Tracer {
 	return p.wTracer
 }
 
@@ -76,7 +76,11 @@ func (t *WrapperTracer) otelTracer() trace.Tracer {
 // Start forwards the call to the wrapped tracer. It also tries to
 // override the tracer of the returned span if the span implements the
 // OverrideTracerSpanExtension interface.
-func (t *WrapperTracer) Start(ctx context.Context, name string, opts ...trace.SpanStartOption) (context.Context, trace.Span) {
+func (t *WrapperTracer) Start(
+	ctx context.Context,
+	name string,
+	opts ...trace.SpanStartOption,
+) (context.Context, trace.Span) {
 	ctx, span := t.otelTracer().Start(ctx, name, opts...)
 	if spanWithExtension, ok := span.(migration.OverrideTracerSpanExtension); ok {
 		spanWithExtension.OverrideTracer(t)

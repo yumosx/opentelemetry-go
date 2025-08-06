@@ -6,6 +6,7 @@ package opentracing
 import (
 	"context"
 	"fmt"
+	"maps"
 	"testing"
 
 	ot "github.com/opentracing/opentracing-go"
@@ -13,16 +14,15 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/baggage"
-	"go.opentelemetry.io/otel/bridge/opentracing/internal"
 	"go.opentelemetry.io/otel/trace"
 )
 
 type mixedAPIsTestCase struct {
 	desc string
 
-	setup func(*testing.T, *internal.MockTracer)
+	setup func(*testing.T, *mockTracer)
 	run   func(*testing.T, context.Context)
-	check func(*testing.T, *internal.MockTracer)
+	check func(*testing.T, *mockTracer)
 }
 
 func getMixedAPIsTestCases() []mixedAPIsTestCase {
@@ -99,7 +99,7 @@ func getMixedAPIsTestCases() []mixedAPIsTestCase {
 func TestMixedAPIs(t *testing.T) {
 	for idx, tc := range getMixedAPIsTestCases() {
 		t.Logf("Running test case %d: %s", idx, tc.desc)
-		mockOtelTracer := internal.NewMockTracer()
+		mockOtelTracer := newMockTracer()
 		ctx, otTracer, otelProvider := NewTracerPairWithContext(context.Background(), mockOtelTracer)
 		otTracer.SetWarningHandler(func(msg string) {
 			t.Log(msg)
@@ -128,12 +128,12 @@ func newSimpleTest() *simpleTest {
 	}
 }
 
-func (st *simpleTest) setup(t *testing.T, tracer *internal.MockTracer) {
+func (st *simpleTest) setup(_ *testing.T, tracer *mockTracer) {
 	tracer.SpareTraceIDs = append(tracer.SpareTraceIDs, st.traceID)
 	tracer.SpareSpanIDs = append(tracer.SpareSpanIDs, st.spanIDs...)
 }
 
-func (st *simpleTest) check(t *testing.T, tracer *internal.MockTracer) {
+func (st *simpleTest) check(t *testing.T, tracer *mockTracer) {
 	checkTraceAndSpans(t, tracer, st.traceID, st.spanIDs)
 }
 
@@ -145,7 +145,7 @@ func (st *simpleTest) runOTOtelOT(t *testing.T, ctx context.Context) {
 	runOTOtelOT(t, ctx, "simple", st.noop)
 }
 
-func (st *simpleTest) noop(t *testing.T, ctx context.Context) context.Context {
+func (st *simpleTest) noop(_ *testing.T, ctx context.Context) context.Context {
 	return ctx
 }
 
@@ -166,7 +166,7 @@ func newCurrentActiveSpanTest() *currentActiveSpanTest {
 	}
 }
 
-func (cast *currentActiveSpanTest) setup(t *testing.T, tracer *internal.MockTracer) {
+func (cast *currentActiveSpanTest) setup(_ *testing.T, tracer *mockTracer) {
 	tracer.SpareTraceIDs = append(tracer.SpareTraceIDs, cast.traceID)
 	tracer.SpareSpanIDs = append(tracer.SpareSpanIDs, cast.spanIDs...)
 
@@ -174,23 +174,41 @@ func (cast *currentActiveSpanTest) setup(t *testing.T, tracer *internal.MockTrac
 	cast.recordedActiveOTSpanIDs = nil
 }
 
-func (cast *currentActiveSpanTest) check(t *testing.T, tracer *internal.MockTracer) {
+func (cast *currentActiveSpanTest) check(t *testing.T, tracer *mockTracer) {
 	checkTraceAndSpans(t, tracer, cast.traceID, cast.spanIDs)
 	if len(cast.recordedCurrentOtelSpanIDs) != len(cast.spanIDs) {
-		t.Errorf("Expected to have %d recorded Otel current spans, got %d", len(cast.spanIDs), len(cast.recordedCurrentOtelSpanIDs))
+		t.Errorf(
+			"Expected to have %d recorded Otel current spans, got %d",
+			len(cast.spanIDs),
+			len(cast.recordedCurrentOtelSpanIDs),
+		)
 	}
 	if len(cast.recordedActiveOTSpanIDs) != len(cast.spanIDs) {
-		t.Errorf("Expected to have %d recorded OT active spans, got %d", len(cast.spanIDs), len(cast.recordedActiveOTSpanIDs))
+		t.Errorf(
+			"Expected to have %d recorded OT active spans, got %d",
+			len(cast.spanIDs),
+			len(cast.recordedActiveOTSpanIDs),
+		)
 	}
 
 	minLen := min(len(cast.recordedCurrentOtelSpanIDs), len(cast.spanIDs))
 	minLen = min(minLen, len(cast.recordedActiveOTSpanIDs))
 	for i := 0; i < minLen; i++ {
 		if cast.recordedCurrentOtelSpanIDs[i] != cast.spanIDs[i] {
-			t.Errorf("Expected span idx %d (%d) to be recorded as current span in Otel, got %d", i, cast.spanIDs[i], cast.recordedCurrentOtelSpanIDs[i])
+			t.Errorf(
+				"Expected span idx %d (%d) to be recorded as current span in Otel, got %d",
+				i,
+				cast.spanIDs[i],
+				cast.recordedCurrentOtelSpanIDs[i],
+			)
 		}
 		if cast.recordedActiveOTSpanIDs[i] != cast.spanIDs[i] {
-			t.Errorf("Expected span idx %d (%d) to be recorded as active span in OT, got %d", i, cast.spanIDs[i], cast.recordedActiveOTSpanIDs[i])
+			t.Errorf(
+				"Expected span idx %d (%d) to be recorded as active span in OT, got %d",
+				i,
+				cast.spanIDs[i],
+				cast.recordedActiveOTSpanIDs[i],
+			)
 		}
 	}
 }
@@ -203,7 +221,7 @@ func (cast *currentActiveSpanTest) runOTOtelOT(t *testing.T, ctx context.Context
 	runOTOtelOT(t, ctx, "cast", cast.recordSpans)
 }
 
-func (cast *currentActiveSpanTest) recordSpans(t *testing.T, ctx context.Context) context.Context {
+func (cast *currentActiveSpanTest) recordSpans(_ *testing.T, ctx context.Context) context.Context {
 	spanID := trace.SpanContextFromContext(ctx).SpanID()
 	cast.recordedCurrentOtelSpanIDs = append(cast.recordedCurrentOtelSpanIDs, spanID)
 
@@ -218,9 +236,9 @@ func (cast *currentActiveSpanTest) recordSpans(t *testing.T, ctx context.Context
 // context intact test
 
 type contextIntactTest struct {
-	contextKeyValues []internal.MockContextKeyValue
+	contextKeyValues []mockContextKeyValue
 
-	recordedContextValues []interface{}
+	recordedContextValues []any
 	recordIdx             int
 }
 
@@ -238,7 +256,7 @@ type coin3Value struct{}
 
 func newContextIntactTest() *contextIntactTest {
 	return &contextIntactTest{
-		contextKeyValues: []internal.MockContextKeyValue{
+		contextKeyValues: []mockContextKeyValue{
 			{
 				Key:   coin1Key{},
 				Value: coin1Value{},
@@ -255,20 +273,24 @@ func newContextIntactTest() *contextIntactTest {
 	}
 }
 
-func (coin *contextIntactTest) setup(t *testing.T, tracer *internal.MockTracer) {
+func (coin *contextIntactTest) setup(_ *testing.T, tracer *mockTracer) {
 	tracer.SpareContextKeyValues = append(tracer.SpareContextKeyValues, coin.contextKeyValues...)
 
 	coin.recordedContextValues = nil
 	coin.recordIdx = 0
 }
 
-func (coin *contextIntactTest) check(t *testing.T, tracer *internal.MockTracer) {
+func (coin *contextIntactTest) check(t *testing.T, _ *mockTracer) {
 	if len(coin.recordedContextValues) != len(coin.contextKeyValues) {
-		t.Errorf("Expected to have %d recorded context values, got %d", len(coin.contextKeyValues), len(coin.recordedContextValues))
+		t.Errorf(
+			"Expected to have %d recorded context values, got %d",
+			len(coin.contextKeyValues),
+			len(coin.recordedContextValues),
+		)
 	}
 
 	minLen := min(len(coin.recordedContextValues), len(coin.contextKeyValues))
-	for i := 0; i < minLen; i++ {
+	for i := range minLen {
 		key := coin.contextKeyValues[i].Key
 		value := coin.contextKeyValues[i].Value
 		gotValue := coin.recordedContextValues[i]
@@ -330,24 +352,29 @@ func newBaggageItemsPreservationTest() *baggageItemsPreservationTest {
 	}
 }
 
-func (bip *baggageItemsPreservationTest) setup(t *testing.T, tracer *internal.MockTracer) {
+func (bip *baggageItemsPreservationTest) setup(*testing.T, *mockTracer) {
 	bip.step = 0
 	bip.recordedBaggage = nil
 }
 
-func (bip *baggageItemsPreservationTest) check(t *testing.T, tracer *internal.MockTracer) {
+func (bip *baggageItemsPreservationTest) check(t *testing.T, _ *mockTracer) {
 	if len(bip.recordedBaggage) != len(bip.baggageItems) {
 		t.Errorf("Expected %d recordings, got %d", len(bip.baggageItems), len(bip.recordedBaggage))
 	}
 	minLen := min(len(bip.recordedBaggage), len(bip.baggageItems))
 
-	for i := 0; i < minLen; i++ {
+	for i := range minLen {
 		recordedItems := bip.recordedBaggage[i]
 		if len(recordedItems) != i+1 {
-			t.Errorf("Expected %d recorded baggage items in recording %d, got %d", i+1, i+1, len(bip.recordedBaggage[i]))
+			t.Errorf(
+				"Expected %d recorded baggage items in recording %d, got %d",
+				i+1,
+				i+1,
+				len(bip.recordedBaggage[i]),
+			)
 		}
 		minItemLen := min(len(bip.baggageItems), i+1)
-		for j := 0; j < minItemLen; j++ {
+		for j := range minItemLen {
 			expectedItem := bip.baggageItems[j]
 			if gotValue, ok := recordedItems[expectedItem.key]; !ok {
 				t.Errorf("Missing baggage item %q in recording %d", expectedItem.key, i+1)
@@ -423,13 +450,13 @@ func newBaggageInteroperationTest() *baggageInteroperationTest {
 	}
 }
 
-func (bio *baggageInteroperationTest) setup(t *testing.T, tracer *internal.MockTracer) {
+func (bio *baggageInteroperationTest) setup(*testing.T, *mockTracer) {
 	bio.step = 0
 	bio.recordedOTBaggage = nil
 	bio.recordedOtelBaggage = nil
 }
 
-func (bio *baggageInteroperationTest) check(t *testing.T, tracer *internal.MockTracer) {
+func (bio *baggageInteroperationTest) check(t *testing.T, _ *mockTracer) {
 	checkBIORecording(t, "OT", bio.baggageItems, bio.recordedOTBaggage)
 	checkBIORecording(t, "Otel", bio.baggageItems, bio.recordedOtelBaggage)
 }
@@ -448,23 +475,34 @@ func checkBIORecording(t *testing.T, apiDesc string, initialItems []bipBaggage, 
 		t.Errorf("Expected %d recordings from %s, got %d", len(initialItems), apiDesc, len(recordings))
 	}
 	minRecLen := min(len(initialItems), len(recordings))
-	for i := 0; i < minRecLen; i++ {
+	for i := range minRecLen {
 		recordedItems := recordings[i]
 		expectedItemsInStep := (i + 1) * 2
 		if expectedItemsInStep != len(recordedItems) {
-			t.Errorf("Expected %d recorded items in recording %d from %s, got %d", expectedItemsInStep, i, apiDesc, len(recordedItems))
+			t.Errorf(
+				"Expected %d recorded items in recording %d from %s, got %d",
+				expectedItemsInStep,
+				i,
+				apiDesc,
+				len(recordedItems),
+			)
 		}
 		recordedItemsCopy := make(map[string]string, len(recordedItems))
-		for k, v := range recordedItems {
-			recordedItemsCopy[k] = v
-		}
+		maps.Copy(recordedItemsCopy, recordedItems)
 		for j := 0; j < i+1; j++ {
 			otKey, otelKey := generateBaggageKeys(initialItems[j].key)
 			value := initialItems[j].value
 			for _, k := range []string{otKey, otelKey} {
 				if v, ok := recordedItemsCopy[k]; ok {
 					if value != v {
-						t.Errorf("Expected value %s under key %s in recording %d from %s, got %s", value, k, i, apiDesc, v)
+						t.Errorf(
+							"Expected value %s under key %s in recording %d from %s, got %s",
+							value,
+							k,
+							i,
+							apiDesc,
+							v,
+						)
 					}
 					delete(recordedItemsCopy, k)
 				} else {
@@ -537,7 +575,12 @@ func generateBaggageKeys(key string) (otKey, otelKey string) {
 
 // helpers
 
-func checkTraceAndSpans(t *testing.T, tracer *internal.MockTracer, expectedTraceID trace.TraceID, expectedSpanIDs []trace.SpanID) {
+func checkTraceAndSpans(
+	t *testing.T,
+	tracer *mockTracer,
+	expectedTraceID trace.TraceID,
+	expectedSpanIDs []trace.SpanID,
+) {
 	expectedSpanCount := len(expectedSpanIDs)
 
 	// reverse spanIDs, since first span ID belongs to root, that
@@ -562,7 +605,13 @@ func checkTraceAndSpans(t *testing.T, tracer *internal.MockTracer, expectedTrace
 	for idx, span := range tracer.FinishedSpans {
 		sctx := span.SpanContext()
 		if sctx.TraceID() != expectedTraceID {
-			t.Errorf("Expected trace ID %v in span %d (%d), got %v", expectedTraceID, idx, sctx.SpanID(), sctx.TraceID())
+			t.Errorf(
+				"Expected trace ID %v in span %d (%d), got %v",
+				expectedTraceID,
+				idx,
+				sctx.SpanID(),
+				sctx.TraceID(),
+			)
 		}
 		expectedSpanID := spanIDs[idx]
 		expectedParentSpanID := parentSpanIDs[idx]
@@ -570,10 +619,22 @@ func checkTraceAndSpans(t *testing.T, tracer *internal.MockTracer, expectedTrace
 			t.Errorf("Expected finished span %d to have span ID %d, but got %d", idx, expectedSpanID, sctx.SpanID())
 		}
 		if span.ParentSpanID != expectedParentSpanID {
-			t.Errorf("Expected finished span %d (span ID: %d) to have parent span ID %d, but got %d", idx, sctx.SpanID(), expectedParentSpanID, span.ParentSpanID)
+			t.Errorf(
+				"Expected finished span %d (span ID: %d) to have parent span ID %d, but got %d",
+				idx,
+				sctx.SpanID(),
+				expectedParentSpanID,
+				span.ParentSpanID,
+			)
 		}
 		if span.SpanKind != sks[span.SpanContext().SpanID()] {
-			t.Errorf("Expected finished span %d (span ID: %d) to have span.kind to be '%v' but was '%v'", idx, sctx.SpanID(), sks[span.SpanContext().SpanID()], span.SpanKind)
+			t.Errorf(
+				"Expected finished span %d (span ID: %d) to have span.kind to be '%v' but was '%v'",
+				idx,
+				sctx.SpanID(),
+				sks[span.SpanContext().SpanID()],
+				span.SpanKind,
+			)
 		}
 	}
 }
@@ -600,7 +661,12 @@ func simpleSpanIDs(count int) []trace.SpanID {
 	return base[:count]
 }
 
-func runOtelOTOtel(t *testing.T, ctx context.Context, name string, callback func(*testing.T, context.Context) context.Context) {
+func runOtelOTOtel(
+	t *testing.T,
+	ctx context.Context,
+	name string,
+	callback func(*testing.T, context.Context) context.Context,
+) {
 	tr := otel.Tracer("")
 	ctx, span := tr.Start(ctx, fmt.Sprintf("%s_Otel_OTOtel", name), trace.WithSpanKind(trace.SpanKindClient))
 	defer span.End()
@@ -610,16 +676,29 @@ func runOtelOTOtel(t *testing.T, ctx context.Context, name string, callback func
 		defer span.Finish()
 		ctx2 = callback(t, ctx2)
 		func(ctx3 context.Context) {
-			ctx3, span := tr.Start(ctx3, fmt.Sprintf("%sOtelOT_Otel_", name), trace.WithSpanKind(trace.SpanKindProducer))
+			ctx3, span := tr.Start(
+				ctx3,
+				fmt.Sprintf("%sOtelOT_Otel_", name),
+				trace.WithSpanKind(trace.SpanKindProducer),
+			)
 			defer span.End()
 			_ = callback(t, ctx3)
 		}(ctx2)
 	}(ctx)
 }
 
-func runOTOtelOT(t *testing.T, ctx context.Context, name string, callback func(*testing.T, context.Context) context.Context) {
+func runOTOtelOT(
+	t *testing.T,
+	ctx context.Context,
+	name string,
+	callback func(*testing.T, context.Context) context.Context,
+) {
 	tr := otel.Tracer("")
-	span, ctx := ot.StartSpanFromContext(ctx, fmt.Sprintf("%s_OT_OtelOT", name), ot.Tag{Key: "span.kind", Value: "client"})
+	span, ctx := ot.StartSpanFromContext(
+		ctx,
+		fmt.Sprintf("%s_OT_OtelOT", name),
+		ot.Tag{Key: "span.kind", Value: "client"},
+	)
 	defer span.Finish()
 	ctx = callback(t, ctx)
 	func(ctx2 context.Context) {
@@ -627,7 +706,11 @@ func runOTOtelOT(t *testing.T, ctx context.Context, name string, callback func(*
 		defer span.End()
 		ctx2 = callback(t, ctx2)
 		func(ctx3 context.Context) {
-			span, ctx3 := ot.StartSpanFromContext(ctx3, fmt.Sprintf("%sOTOtel_OT_", name), ot.Tag{Key: "span.kind", Value: "producer"})
+			span, ctx3 := ot.StartSpanFromContext(
+				ctx3,
+				fmt.Sprintf("%sOTOtel_OT_", name),
+				ot.Tag{Key: "span.kind", Value: "producer"},
+			)
 			defer span.Finish()
 			_ = callback(t, ctx3)
 		}(ctx2)
@@ -637,7 +720,7 @@ func runOTOtelOT(t *testing.T, ctx context.Context, name string, callback func(*
 func TestOtTagToOTelAttrCheckTypeConversions(t *testing.T) {
 	tableTest := []struct {
 		key               string
-		value             interface{}
+		value             any
 		expectedValueType attribute.Type
 	}{
 		{

@@ -5,7 +5,7 @@ package resource_test
 
 import (
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"testing"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -18,21 +18,21 @@ func makeAttrs(n int) (_, _ *resource.Resource) {
 	used := map[string]bool{}
 	l1 := make([]attribute.KeyValue, n)
 	l2 := make([]attribute.KeyValue, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		var k string
 		for {
-			k = fmt.Sprint("k", rand.Intn(1000000000))
+			k = fmt.Sprint("k", rand.IntN(1000000000))
 			if !used[k] {
 				used[k] = true
 				break
 			}
 		}
-		l1[i] = attribute.String(k, fmt.Sprint("v", rand.Intn(1000000000)))
+		l1[i] = attribute.String(k, fmt.Sprint("v", rand.IntN(1000000000)))
 
 		if rand.Float64() < conflict {
 			l2[i] = l1[i]
 		} else {
-			l2[i] = attribute.String(k, fmt.Sprint("v", rand.Intn(1000000000)))
+			l2[i] = attribute.String(k, fmt.Sprint("v", rand.IntN(1000000000)))
 		}
 	}
 	return resource.NewSchemaless(l1...), resource.NewSchemaless(l2...)

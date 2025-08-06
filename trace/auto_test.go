@@ -18,7 +18,7 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
-	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.34.0"
 	"go.opentelemetry.io/otel/trace/internal/telemetry"
 )
 
@@ -125,7 +125,7 @@ func TestTracerProviderConcurrentSafe(t *testing.T) {
 			defer close(done)
 
 			var wg sync.WaitGroup
-			for i := 0; i < goroutines; i++ {
+			for i := range goroutines {
 				wg.Add(1)
 				go func(name, version string) {
 					defer wg.Done()
@@ -207,7 +207,7 @@ func TestTracerConcurrentSafe(t *testing.T) {
 			defer close(done)
 
 			var wg sync.WaitGroup
-			for i := 0; i < goroutines; i++ {
+			for i := range goroutines {
 				wg.Add(1)
 				go func(name string) {
 					defer wg.Done()
@@ -816,12 +816,24 @@ func TestSpanAttributeValueLimits(t *testing.T) {
 			assert.Truef(t, eq(want, s.span.Attrs), "set span attributes: got %#v, want %#v", s.span.Attrs, want)
 
 			s.AddEvent("test", WithAttributes(aStr, aStrSlice))
-			assert.Truef(t, eq(want, s.span.Events[0].Attrs), "span event attributes: got %#v, want %#v", s.span.Events[0].Attrs, want)
+			assert.Truef(
+				t,
+				eq(want, s.span.Events[0].Attrs),
+				"span event attributes: got %#v, want %#v",
+				s.span.Events[0].Attrs,
+				want,
+			)
 
 			s.AddLink(Link{
 				Attributes: []attribute.KeyValue{aStr, aStrSlice},
 			})
-			assert.Truef(t, eq(want, s.span.Links[0].Attrs), "span link attributes: got %#v, want %#v", s.span.Links[0].Attrs, want)
+			assert.Truef(
+				t,
+				eq(want, s.span.Links[0].Attrs),
+				"span link attributes: got %#v, want %#v",
+				s.span.Links[0].Attrs,
+				want,
+			)
 
 			builder.Options = []SpanStartOption{
 				WithAttributes(aStr, aStrSlice),
@@ -831,7 +843,13 @@ func TestSpanAttributeValueLimits(t *testing.T) {
 			}
 			s = builder.Build()
 			assert.Truef(t, eq(want, s.span.Attrs), "new span attributes: got %#v, want %#v", s.span.Attrs, want)
-			assert.Truef(t, eq(want, s.span.Links[0].Attrs), "new span link attributes: got %#v, want %#v", s.span.Attrs, want)
+			assert.Truef(
+				t,
+				eq(want, s.span.Links[0].Attrs),
+				"new span link attributes: got %#v, want %#v",
+				s.span.Attrs,
+				want,
+			)
 		})
 	}
 }
@@ -1023,7 +1041,7 @@ func TestSpanConcurrentSafe(t *testing.T) {
 			defer close(done)
 
 			var wg sync.WaitGroup
-			for i := 0; i < nGoroutine; i++ {
+			for i := range nGoroutine {
 				wg.Add(1)
 				go func(n int) {
 					defer wg.Done()
@@ -1056,7 +1074,7 @@ func TestSpanConcurrentSafe(t *testing.T) {
 			ctx := context.Background()
 
 			var wg sync.WaitGroup
-			for i := 0; i < nSpans; i++ {
+			for i := range nSpans {
 				wg.Add(1)
 				go func(n int) {
 					defer wg.Done()
@@ -1076,7 +1094,7 @@ func TestSpanConcurrentSafe(t *testing.T) {
 			defer close(done)
 
 			var wg sync.WaitGroup
-			for i := 0; i < nTracers; i++ {
+			for i := range nTracers {
 				wg.Add(1)
 				go func(n int) {
 					defer wg.Done()

@@ -33,7 +33,9 @@ const envVarResourceAttributes = "OTEL_RESOURCE_ATTRIBUTES"
 
 var _ Reader = (*reader)(nil)
 
-func (r *reader) aggregation(kind InstrumentKind) Aggregation { // nolint:revive  // import-shadow for method scoped by type.
+func (r *reader) aggregation(
+	kind InstrumentKind,
+) Aggregation { // nolint:revive  // import-shadow for method scoped by type.
 	return r.aggregationFunc(kind)
 }
 
@@ -64,11 +66,11 @@ func TestConfigReaderSignalsEmpty(t *testing.T) {
 func TestConfigReaderSignalsForwarded(t *testing.T) {
 	var flush, sdown int
 	r := &reader{
-		forceFlushFunc: func(ctx context.Context) error {
+		forceFlushFunc: func(context.Context) error {
 			flush++
 			return nil
 		},
-		shutdownFunc: func(ctx context.Context) error {
+		shutdownFunc: func(context.Context) error {
 			sdown++
 			return nil
 		},
@@ -91,8 +93,8 @@ func TestConfigReaderSignalsForwarded(t *testing.T) {
 
 func TestConfigReaderSignalsForwardedErrors(t *testing.T) {
 	r := &reader{
-		forceFlushFunc: func(ctx context.Context) error { return assert.AnError },
-		shutdownFunc:   func(ctx context.Context) error { return assert.AnError },
+		forceFlushFunc: func(context.Context) error { return assert.AnError },
+		shutdownFunc:   func(context.Context) error { return assert.AnError },
 	}
 	c := newConfig([]Option{WithReader(r)})
 	f, s := c.readerSignals()
@@ -113,9 +115,9 @@ func TestUnifyMultiError(t *testing.T) {
 		e2 = errors.New("2")
 	)
 	err := unify([]func(context.Context) error{
-		func(ctx context.Context) error { return e0 },
-		func(ctx context.Context) error { return e1 },
-		func(ctx context.Context) error { return e2 },
+		func(context.Context) error { return e0 },
+		func(context.Context) error { return e1 },
+		func(context.Context) error { return e2 },
 	})(context.Background())
 	assert.ErrorIs(t, err, e0)
 	assert.ErrorIs(t, err, e1)
@@ -148,9 +150,15 @@ func TestWithResource(t *testing.T) {
 			want:    resource.Default(),
 		},
 		{
-			name:    "explicit resource",
-			options: []Option{WithResource(resource.NewSchemaless(attribute.String("rk1", "rv1"), attribute.Int64("rk2", 5)))},
-			want:    mergeResource(t, resource.Environment(), resource.NewSchemaless(attribute.String("rk1", "rv1"), attribute.Int64("rk2", 5))),
+			name: "explicit resource",
+			options: []Option{
+				WithResource(resource.NewSchemaless(attribute.String("rk1", "rv1"), attribute.Int64("rk2", 5))),
+			},
+			want: mergeResource(
+				t,
+				resource.Environment(),
+				resource.NewSchemaless(attribute.String("rk1", "rv1"), attribute.Int64("rk2", 5)),
+			),
 		},
 		{
 			name: "last resource wins",
@@ -158,16 +166,25 @@ func TestWithResource(t *testing.T) {
 				WithResource(resource.NewSchemaless(attribute.String("rk1", "vk1"), attribute.Int64("rk2", 5))),
 				WithResource(resource.NewSchemaless(attribute.String("rk3", "rv3"), attribute.Int64("rk4", 10))),
 			},
-			want: mergeResource(t, resource.Environment(), resource.NewSchemaless(attribute.String("rk3", "rv3"), attribute.Int64("rk4", 10))),
+			want: mergeResource(
+				t,
+				resource.Environment(),
+				resource.NewSchemaless(attribute.String("rk3", "rv3"), attribute.Int64("rk4", 10)),
+			),
 		},
 		{
-			name:    "overlapping attributes with environment resource",
-			options: []Option{WithResource(resource.NewSchemaless(attribute.String("rk1", "rv1"), attribute.Int64("rk5", 10)))},
-			want:    mergeResource(t, resource.Environment(), resource.NewSchemaless(attribute.String("rk1", "rv1"), attribute.Int64("rk5", 10))),
+			name: "overlapping attributes with environment resource",
+			options: []Option{
+				WithResource(resource.NewSchemaless(attribute.String("rk1", "rv1"), attribute.Int64("rk5", 10))),
+			},
+			want: mergeResource(
+				t,
+				resource.Environment(),
+				resource.NewSchemaless(attribute.String("rk1", "rv1"), attribute.Int64("rk5", 10)),
+			),
 		},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			got := newConfig(tc.options).res
 			if diff := cmp.Diff(got, tc.want); diff != "" {
@@ -284,6 +301,54 @@ func TestWithExemplarFilterOff(t *testing.T) {
 			assert.NotNil(t, c.exemplarFilter)
 			assert.Equal(t, tc.expectFilterNotSampled, c.exemplarFilter(context.Background()))
 			assert.Equal(t, tc.expectFilterSampled, c.exemplarFilter(sample(context.Background())))
+		})
+	}
+}
+
+func TestWithCardinalityLimit(t *testing.T) {
+	cases := []struct {
+		name          string
+		envValue      string
+		options       []Option
+		expectedLimit int
+	}{
+		{
+			name:          "only cardinality limit from option",
+			envValue:      "",
+			options:       []Option{WithCardinalityLimit(1000)},
+			expectedLimit: 1000,
+		},
+		{
+			name:          "cardinality limit from option overrides env",
+			envValue:      "500",
+			options:       []Option{WithCardinalityLimit(1000)},
+			expectedLimit: 1000,
+		},
+		{
+			name:          "cardinality limit from env",
+			envValue:      "1234",
+			options:       []Option{},
+			expectedLimit: 1234,
+		},
+		{
+			name:          "invalid env value uses default",
+			envValue:      "not-a-number",
+			options:       []Option{},
+			expectedLimit: defaultCardinalityLimit,
+		},
+		{
+			name:          "empty env and no option uses default",
+			envValue:      "",
+			options:       []Option{},
+			expectedLimit: defaultCardinalityLimit,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("OTEL_GO_X_CARDINALITY_LIMIT", tc.envValue)
+			c := newConfig(tc.options)
+			assert.Equal(t, tc.expectedLimit, c.cardinalityLimit)
 		})
 	}
 }

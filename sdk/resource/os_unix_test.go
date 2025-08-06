@@ -27,7 +27,7 @@ func fakeUnameProvider(buf *unix.Utsname) error {
 	return nil
 }
 
-func fakeUnameProviderWithError(buf *unix.Utsname) error {
+func fakeUnameProviderWithError(*unix.Utsname) error {
 	return fmt.Errorf("error invoking uname(2)")
 }
 
@@ -69,16 +69,29 @@ func TestGetFirstAvailableFile(t *testing.T) {
 	}{
 		{"Gets first, skip second candidate", []string{filename1, filename2}, filename1, ""},
 		{"Skips first, gets second candidate", []string{"does_not_exists", filename2}, filename2, ""},
-		{"Skips first, gets second, ignores third candidate", []string{"does_not_exists", filename2, filename1}, filename2, ""},
+		{
+			"Skips first, gets second, ignores third candidate",
+			[]string{"does_not_exists", filename2, filename1},
+			filename2,
+			"",
+		},
 		{"No candidates (empty slice)", []string{}, "", "no candidate file available: []"},
 		{"No candidates (nil slice)", nil, "", "no candidate file available: []"},
-		{"Single nonexisting candidate", []string{"does_not_exists"}, "", "no candidate file available: [does_not_exists]"},
-		{"Multiple nonexisting candidates", []string{"does_not_exists", "this_either"}, "", "no candidate file available: [does_not_exists this_either]"},
+		{
+			"Single nonexisting candidate",
+			[]string{"does_not_exists"},
+			"",
+			"no candidate file available: [does_not_exists]",
+		},
+		{
+			"Multiple nonexisting candidates",
+			[]string{"does_not_exists", "this_either"},
+			"",
+			"no candidate file available: [does_not_exists this_either]",
+		},
 	}
 
 	for _, tc := range tt {
-		tc := tc
-
 		t.Run(tc.Name, func(t *testing.T) {
 			file, err := resource.GetFirstAvailableFile(tc.Candidates)
 

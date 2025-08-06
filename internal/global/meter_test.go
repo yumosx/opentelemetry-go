@@ -18,7 +18,7 @@ import (
 	"go.opentelemetry.io/otel/metric/noop"
 )
 
-func TestMeterProviderConcurrentSafe(t *testing.T) {
+func TestMeterProviderConcurrentSafe(*testing.T) {
 	mp := &meterProvider{}
 	done := make(chan struct{})
 	finish := make(chan struct{})
@@ -39,7 +39,7 @@ func TestMeterProviderConcurrentSafe(t *testing.T) {
 	<-done
 }
 
-var zeroCallback metric.Callback = func(ctx context.Context, or metric.Observer) error {
+var zeroCallback metric.Callback = func(context.Context, metric.Observer) error {
 	return nil
 }
 
@@ -125,7 +125,10 @@ func TestUnregisterConcurrentSafe(t *testing.T) {
 	<-done
 }
 
-func testSetupAllInstrumentTypes(t *testing.T, m metric.Meter) (metric.Float64Counter, metric.Float64ObservableCounter) {
+func testSetupAllInstrumentTypes(
+	t *testing.T,
+	m metric.Meter,
+) (metric.Float64Counter, metric.Float64ObservableCounter) {
 	afcounter, err := m.Float64ObservableCounter("test_Async_Counter")
 	require.NoError(t, err)
 	_, err = m.Float64ObservableUpDownCounter("test_Async_UpDownCounter")
@@ -140,7 +143,7 @@ func testSetupAllInstrumentTypes(t *testing.T, m metric.Meter) (metric.Float64Co
 	_, err = m.Int64ObservableGauge("test_Async_Gauge")
 	assert.NoError(t, err)
 
-	_, err = m.RegisterCallback(func(ctx context.Context, obs metric.Observer) error {
+	_, err = m.RegisterCallback(func(_ context.Context, obs metric.Observer) error {
 		obs.ObserveFloat64(afcounter, 3)
 		return nil
 	}, afcounter)
@@ -439,7 +442,10 @@ type failingRegisterCallbackMeter struct {
 	noop.Meter
 }
 
-func (m *failingRegisterCallbackMeter) RegisterCallback(metric.Callback, ...metric.Observable) (metric.Registration, error) {
+func (m *failingRegisterCallbackMeter) RegisterCallback(
+	metric.Callback,
+	...metric.Observable,
+) (metric.Registration, error) {
 	return nil, errors.New("an error occurred")
 }
 

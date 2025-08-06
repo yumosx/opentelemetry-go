@@ -5,6 +5,7 @@ package trace // import "go.opentelemetry.io/otel/sdk/trace"
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -17,8 +18,10 @@ import (
 
 // Defaults for BatchSpanProcessorOptions.
 const (
-	DefaultMaxQueueSize       = 2048
-	DefaultScheduleDelay      = 5000
+	DefaultMaxQueueSize = 2048
+	// DefaultScheduleDelay is the delay interval between two consecutive exports, in milliseconds.
+	DefaultScheduleDelay = 5000
+	// DefaultExportTimeout is the duration after which an export is cancelled, in milliseconds.
 	DefaultExportTimeout      = 30000
 	DefaultMaxExportBatchSize = 512
 )
@@ -86,11 +89,7 @@ func NewBatchSpanProcessor(exporter SpanExporter, options ...BatchSpanProcessorO
 	maxExportBatchSize := env.BatchSpanProcessorMaxExportBatchSize(DefaultMaxExportBatchSize)
 
 	if maxExportBatchSize > maxQueueSize {
-		if DefaultMaxExportBatchSize > maxQueueSize {
-			maxExportBatchSize = maxQueueSize
-		} else {
-			maxExportBatchSize = DefaultMaxExportBatchSize
-		}
+		maxExportBatchSize = min(DefaultMaxExportBatchSize, maxQueueSize)
 	}
 
 	o := BatchSpanProcessorOptions{
@@ -122,7 +121,7 @@ func NewBatchSpanProcessor(exporter SpanExporter, options ...BatchSpanProcessorO
 }
 
 // OnStart method does nothing.
-func (bsp *batchSpanProcessor) OnStart(parent context.Context, s ReadWriteSpan) {}
+func (bsp *batchSpanProcessor) OnStart(context.Context, ReadWriteSpan) {}
 
 // OnEnd method enqueues a ReadOnlySpan for later processing.
 func (bsp *batchSpanProcessor) OnEnd(s ReadOnlySpan) {
@@ -267,7 +266,7 @@ func (bsp *batchSpanProcessor) exportSpans(ctx context.Context) error {
 
 	if bsp.o.ExportTimeout > 0 {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, bsp.o.ExportTimeout)
+		ctx, cancel = context.WithTimeoutCause(ctx, bsp.o.ExportTimeout, errors.New("processor export timeout"))
 		defer cancel()
 	}
 
@@ -400,7 +399,7 @@ func (bsp *batchSpanProcessor) enqueueDrop(_ context.Context, sd ReadOnlySpan) b
 }
 
 // MarshalLog is the marshaling function used by the logging system to represent this Span Processor.
-func (bsp *batchSpanProcessor) MarshalLog() interface{} {
+func (bsp *batchSpanProcessor) MarshalLog() any {
 	return struct {
 		Type         string
 		SpanExporter SpanExporter
