@@ -195,18 +195,28 @@ type ExportOp struct {
 // of successfully exported logs will be determined by inspecting the
 // RejectedItems field of the PartialSuccess.
 func (e ExportOp) End(err error) {
+	logInflightEnabled := e.inst.logInflightMetric.Enabled(e.ctx)
+	logExportedEnabled := e.inst.logExportedMetric.Enabled(e.ctx)
+	logDurationEnabled := e.inst.logExportedDurationMetric.Enabled(e.ctx)
+
+	if !logDurationEnabled && !logExportedEnabled && !logInflightEnabled {
+		return
+	}
+
 	addOpt := get[metric.AddOption](addOpPool)
 	defer put(addOpPool, addOpt)
 	*addOpt = append(*addOpt, e.inst.addOpt)
 
-	if e.inst.logInflightMetric.Enabled(e.ctx) {
+	if logInflightEnabled {
 		e.inst.logInflightMetric.Add(e.ctx, -e.nLogs, *addOpt...)
 	}
+
 	success := successful(e.nLogs, err)
-	if e.inst.logExportedMetric.Enabled(e.ctx) {
+	if logExportedEnabled {
 		e.inst.logExportedMetric.Add(e.ctx, success, *addOpt...)
 	}
-	if err != nil && e.inst.logExportedMetric.Enabled(e.ctx) {
+
+	if err != nil && logExportedEnabled {
 		// Add the error.type attribute to the attribute set.
 		attrs := get[attribute.KeyValue](attrsPool)
 		defer put(attrsPool, attrs)
@@ -221,10 +231,12 @@ func (e ExportOp) End(err error) {
 		e.inst.logExportedMetric.Add(e.ctx, e.nLogs-success, *addOpt...)
 	}
 
-	recordOpt := get[metric.RecordOption](recordOptPool)
-	defer put(recordOptPool, recordOpt)
-	*recordOpt = append(*recordOpt, e.inst.recordOption(err))
-	e.inst.logExportedDurationMetric.Record(e.ctx, time.Since(e.start).Seconds(), *recordOpt...)
+	if logDurationEnabled {
+		recordOpt := get[metric.RecordOption](recordOptPool)
+		defer put(recordOptPool, recordOpt)
+		*recordOpt = append(*recordOpt, e.inst.recordOption(err))
+		e.inst.logExportedDurationMetric.Record(e.ctx, time.Since(e.start).Seconds(), *recordOpt...)
+	}
 }
 
 func (i *Instrumentation) recordOption(err error) metric.RecordOption {
