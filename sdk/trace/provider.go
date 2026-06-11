@@ -42,6 +42,8 @@ type tracerProviderConfig struct {
 
 	// resource contains attributes representing an entity that produces telemetry.
 	resource *resource.Resource
+
+	tracerConfigurator TracerConfigurator
 }
 
 // MarshalLog is the marshaling function used by the logging system to represent this Provider.
@@ -74,10 +76,11 @@ type TracerProvider struct {
 
 	// These fields are not protected by the lock mu. They are assumed to be
 	// immutable after creation of the TracerProvider.
-	sampler     Sampler
-	idGenerator IDGenerator
-	spanLimits  SpanLimits
-	resource    *resource.Resource
+	sampler            Sampler
+	idGenerator        IDGenerator
+	spanLimits         SpanLimits
+	resource           *resource.Resource
+	tracerConfigurator TracerConfigurator
 }
 
 var _ trace.TracerProvider = &TracerProvider{}
@@ -112,11 +115,12 @@ func NewTracerProvider(opts ...TracerProviderOption) *TracerProvider {
 	o = ensureValidTracerProviderConfig(o)
 
 	tp := &TracerProvider{
-		namedTracer: make(map[instrumentation.Scope]*tracer),
-		sampler:     o.sampler,
-		idGenerator: o.idGenerator,
-		spanLimits:  o.spanLimits,
-		resource:    o.resource,
+		namedTracer:        make(map[instrumentation.Scope]*tracer),
+		sampler:            o.sampler,
+		idGenerator:        o.idGenerator,
+		spanLimits:         o.spanLimits,
+		resource:           o.resource,
+		tracerConfigurator: o.tracerConfigurator,
 	}
 	global.Info("TracerProvider created", "config", o)
 
@@ -150,6 +154,12 @@ func (p *TracerProvider) Tracer(name string, opts ...trace.TracerOption) trace.T
 		Version:    c.InstrumentationVersion(),
 		SchemaURL:  c.SchemaURL(),
 		Attributes: c.InstrumentationAttributes(),
+	}
+
+	if p.tracerConfigurator != nil {
+		if tc := p.tracerConfigurator(is); !tc.Enabled() {
+			return noop.NewTracerProvider().Tracer(name, opts...)
+		}
 	}
 
 	t, ok := func() (trace.Tracer, bool) {
