@@ -4,7 +4,6 @@
 package trace
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -16,11 +15,11 @@ import (
 )
 
 func TestTracerConfiguratorDisablesTracer(t *testing.T) {
-	p := NewTracerProvider(WithTracerConfigurator(func(scope instrumentation.Scope) TracerConfig {
+	p := NewTracerProvider(WithTracerConfigurator(func(scope instrumentation.Scope) apitrace.TracerConfig {
 		if scope.Name == "disabled" {
-			return WithTracerEnabled(false)
+			return apitrace.NewTracerConfig(apitrace.WithTracerEnabled(false))
 		}
-		return TracerConfig{}
+		return apitrace.NewTracerConfig(apitrace.WithTracerEnabled(true))
 	}))
 
 	enabled := p.Tracer("enabled")
@@ -29,30 +28,19 @@ func TestTracerConfiguratorDisablesTracer(t *testing.T) {
 	require.IsType(t, &tracer{}, enabled)
 	require.IsType(t, noop.Tracer{}, disabled)
 
-	_, enabledSpan := enabled.Start(context.Background(), "span")
+	_, enabledSpan := enabled.Start(t.Context(), "span")
 	assert.True(t, enabledSpan.IsRecording())
 
-	_, disabledSpan := disabled.Start(context.Background(), "span")
+	_, disabledSpan := disabled.Start(t.Context(), "span")
 	assert.False(t, disabledSpan.IsRecording())
 }
 
-func TestTracerConfiguratorDefaultEnablesTracer(t *testing.T) {
-	p := NewTracerProvider(WithTracerConfigurator(func(instrumentation.Scope) TracerConfig {
-		return TracerConfig{}
-	}))
-
-	tr := p.Tracer("enabled")
-	require.IsType(t, &tracer{}, tr)
-
-	_, span := tr.Start(context.Background(), "span")
-	assert.True(t, span.IsRecording())
-}
 
 func TestTracerConfiguratorPreservesScope(t *testing.T) {
-	p := NewTracerProvider(WithTracerConfigurator(func(scope instrumentation.Scope) TracerConfig {
+	p := NewTracerProvider(WithTracerConfigurator(func(scope instrumentation.Scope) apitrace.TracerConfig {
 		assert.Equal(t, "my-tracer", scope.Name)
 		assert.Equal(t, "1.0.0", scope.Version)
-		return TracerConfig{}
+		return apitrace.NewTracerConfig(apitrace.WithTracerEnabled(true))
 	}))
 
 	tr := p.Tracer("my-tracer", apitrace.WithInstrumentationVersion("1.0.0"))

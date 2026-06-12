@@ -16,6 +16,7 @@ type TracerConfig struct {
 	// Schema URL of the telemetry emitted by the Tracer.
 	schemaURL string
 	attrs     attribute.Set
+	enabled   bool
 }
 
 // InstrumentationVersion returns the version of the library providing instrumentation.
@@ -32,6 +33,13 @@ func (t *TracerConfig) InstrumentationAttributes() attribute.Set {
 // SchemaURL returns the Schema URL of the telemetry emitted by the Tracer.
 func (t *TracerConfig) SchemaURL() string {
 	return t.schemaURL
+}
+
+// Enabled reports whether the Tracer is enabled.
+//
+// Tracers are enabled by default.
+func (t *TracerConfig) Enabled() bool {
+	return t.enabled
 }
 
 type experimentalOption interface {
@@ -373,6 +381,14 @@ func WithInstrumentationAttributeSet(set attribute.Set) TracerOption {
 func WithSchemaURL(schemaURL string) TracerOption {
 	return tracerOptionFunc(func(cfg TracerConfig) TracerConfig {
 		cfg.schemaURL = schemaURL
+		return cfg
+	})
+}
+
+// WithTracerEnabled sets whether the Tracer is enabled.
+func WithTracerEnabled(enabled bool) TracerOption {
+	return tracerOptionFunc(func(cfg TracerConfig) TracerConfig {
+		cfg.enabled = enabled
 		return cfg
 	})
 }

@@ -231,6 +231,15 @@ func TestTracerConfig(t *testing.T) {
 	assert.Equal(t, attrs, c.InstrumentationAttributes(), "instrumentation attributes")
 }
 
+func TestTracerConfigEnabled(t *testing.T) {
+	var c TracerConfig
+	c = NewTracerConfig(WithTracerEnabled(false))
+	assert.False(t, c.Enabled())
+
+	c = NewTracerConfig(WithTracerEnabled(true))
+	assert.True(t, c.Enabled())
+}
+
 func TestWithInstrumentationAttributesNotLazy(t *testing.T) {
 	attrs := []attribute.KeyValue{
 		attribute.String("service", "test"),
