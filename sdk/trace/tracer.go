@@ -5,6 +5,7 @@ package trace // import "go.opentelemetry.io/otel/sdk/trace"
 
 import (
 	"context"
+	"sync/atomic"
 	"time"
 
 	"go.opentelemetry.io/otel/sdk/instrumentation"
@@ -19,7 +20,12 @@ type tracer struct {
 	provider             *TracerProvider
 	instrumentationScope instrumentation.Scope
 
-	inst observ.Tracer
+	enabled atomic.Bool
+	inst    observ.Tracer
+}
+
+func (tr *tracer) setEnabled(enabled bool) {
+	tr.enabled.Store(enabled)
 }
 
 var _ trace.Tracer = &tracer{}
@@ -39,6 +45,10 @@ func (tr *tracer) Start(
 	if ctx == nil {
 		// Prevent trace.ContextWithSpan from panicking.
 		ctx = context.Background()
+	}
+
+	if !tr.enabled.Load() {
+		return tr.startDisabled(ctx, &config)
 	}
 
 	// For local spans created by this SDK, track child span count.
@@ -75,6 +85,36 @@ func (tr *tracer) Start(
 	}
 
 	return newCtx, s
+}
+
+// startDisabled creates a non-recording span when the Tracer is disabled.
+// This matches the behavior of a No-op Tracer while preserving the same
+// Tracer instance for future configuration updates.
+func (tr *tracer) startDisabled(ctx context.Context, config *trace.SpanConfig) (context.Context, trace.Span) {
+	var psc trace.SpanContext
+	if config.NewRoot() {
+		ctx = trace.ContextWithSpanContext(ctx, psc)
+	} else {
+		psc = trace.SpanContextFromContext(ctx)
+	}
+
+	var tid trace.TraceID
+	var sid trace.SpanID
+	if !psc.TraceID().IsValid() {
+		tid, sid = tr.provider.idGenerator.NewIDs(ctx)
+	} else {
+		tid = psc.TraceID()
+		sid = tr.provider.idGenerator.NewSpanID(ctx, tid)
+	}
+
+	sc := trace.NewSpanContext(trace.SpanContextConfig{
+		TraceID:    tid,
+		SpanID:     sid,
+		TraceState: psc.TraceState(),
+		TraceFlags: psc.TraceFlags() &^ trace.FlagsSampled,
+	})
+	s := tr.newNonRecordingSpan(sc)
+	return trace.ContextWithSpan(ctx, s), s
 }
 
 type runtimeTracer interface {

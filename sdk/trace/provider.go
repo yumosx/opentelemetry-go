@@ -156,19 +156,13 @@ func (p *TracerProvider) Tracer(name string, opts ...trace.TracerOption) trace.T
 		Attributes: c.InstrumentationAttributes(),
 	}
 
-	if p.tracerConfigurator != nil {
-		if tc := p.tracerConfigurator(is); !tc.Enabled() {
-			return noop.NewTracerProvider().Tracer(name, opts...)
-		}
-	}
-
-	t, ok := func() (trace.Tracer, bool) {
+	t, ok := func() (*tracer, bool) {
 		p.mu.Lock()
 		defer p.mu.Unlock()
 		// Must check the flag after acquiring the mutex to avoid returning a valid tracer if Shutdown() ran
 		// after the first check above but before we acquired the mutex.
 		if p.isShutdown.Load() {
-			return noop.NewTracerProvider().Tracer(name, opts...), true
+			return nil, true
 		}
 		t, ok := p.namedTracer[is]
 		if !ok {
@@ -176,6 +170,7 @@ func (p *TracerProvider) Tracer(name string, opts ...trace.TracerOption) trace.T
 				provider:             p,
 				instrumentationScope: is,
 			}
+			t.setEnabled(p.tracerEnabled(is))
 
 			var err error
 			t.inst, err = observ.NewTracer()
@@ -187,6 +182,9 @@ func (p *TracerProvider) Tracer(name string, opts ...trace.TracerOption) trace.T
 		}
 		return t, ok
 	}()
+	if t == nil {
+		return noop.NewTracerProvider().Tracer(name, opts...)
+	}
 	if !ok {
 		// This code is outside the mutex to not hold the lock while calling third party logging code:
 		// - That code may do slow things like I/O, which would prolong the duration the lock is held,
