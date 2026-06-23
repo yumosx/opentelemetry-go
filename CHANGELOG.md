@@ -8,6 +8,24 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- Add `Map` and `MapValue` functions for new `MAP` attribute type in `go.opentelemetry.io/otel/attribute`. (#8445)
+- Support `MAP` attributes in `go.opentelemetry.io/otel/exporters/otlp/otlptrace`. (#8453)
+- Support `MAP` attributes in `go.opentelemetry.io/otel/exporters/otlp/otlplog`. (#8453)
+- Support `MAP` attributes in `go.opentelemetry.io/otel/exporters/otlp/otlpmetric`. (#8453)
+- Support `MAP` attributes in `go.opentelemetry.io/otel/exporters/zipkin`. (#8453)
+- Apply `AttributeValueLengthLimit` to `attribute.MAP` type attribute values in `go.opentelemetry.io/otel/sdk/trace`, recursively truncating contained values. (#8454)
+- Add duplicate-key removal for `attribute.MAP` values in `go.opentelemetry.io/otel/sdk/resource` using last-value-wins semantics. (#8471)
+- Add default duplicate-key removal for `attribute.MAP` values in instrumentation scope attributes in `go.opentelemetry.io/otel/sdk/log` using last-value-wins semantics. (#8471)
+- Add default duplicate-key removal for `attribute.MAP` values in span, event, link, and instrumentation scope attributes in `go.opentelemetry.io/otel/sdk/trace` using last-value-wins semantics. (#8471)
+- Add default duplicate-key removal for `attribute.MAP` values in measurement and instrumentation scope attributes in `go.opentelemetry.io/otel/sdk/metric` using last-value-wins semantics. (#8471)
+- Extend `WithAllowKeyDuplication` in `go.opentelemetry.io/otel/sdk/log` to disable duplicate-key removal in `attribute.MAP` values for instrumentation scope attributes. (#8471)
+- Add `WithUnsafeAttributes` to `go.opentelemetry.io/otel/metric/x` as an experimental no-copy attribute option intended for future performance work. This is a work in progress. (#8251)
+- Add `go.opentelemetry.io/otel/semconv/v1.42.0` package. (#8484)
+  The package contains semantic conventions from the `v1.42.0` version of the OpenTelemetry Semantic Conventions.
+  See the [migration documentation](./semconv/v1.42.0/MIGRATION.md) for information on how to upgrade from `go.opentelemetry.io/otel/semconv/v1.41.0`.
+
 ### Fixed
 
 - Avoid preallocating scope attributes when they are disabled in `go.opentelemetry.io/otel/exporters/prometheus` . (#8404)
@@ -19,6 +37,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Fix `go.opentelemetry.io/otel/exporters/stdout/stdouttrace` self-observability to record `error.type` on operation duration histogram when the `exportedSpans` metric is disabled. (#8432)
 - Fix off-by-one error in `FixedSizeReservoir` in `go.opentelemetry.io/otel/sdk/metric/exemplar`, which prevented the first exemplar after the reservoir is filled from being sampled. (#8309)
 - Fix histogram datapoint reuse in `go.opentelemetry.io/otel/sdk/metric` aggregation to avoid leaking stale sum/min/max values when they are disabled in subsequent collections. (#8403)
+- Prevent zero-hash collapse to empty set in `go.opentelemetry.io/otel/attribute` when computed hash is zero for non-empty input. (#8402)
 
 <!-- Released section -->
 <!-- Don't change this section unless doing release -->
